@@ -20,7 +20,7 @@ jobs:
 
     defaults:
       run:
-        working-directory: ./Infra_Serverless
+        working-directory: /Infra_Serverless
 
     steps:
     - uses: actions/checkout@v3
@@ -101,7 +101,7 @@ jobs:
     if: github.event_name == 'push'
     defaults:
       run:
-        working-directory: ./Infra_Severless
+        working-directory: Infra_Severless
 
     steps:
     - uses: actions/checkout@v3
