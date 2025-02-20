@@ -76,13 +76,16 @@ resource "aws_api_gateway_integration" "lambda_integration" {
   uri                     = aws_lambda_function.magic_items_identifier_api.invoke_arn
 }
 
+#Calling Current ID
+data "aws_caller_identity" "current" {}
+
 # Lambda permission for API Gateway
 resource "aws_lambda_permission" "api_gateway" {
   statement_id  = "AllowAPIGatewayInvoke"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.magic_items_identifier_api.function_name
   principal     = "apigateway.amazonaws.com"
-  source_arn    = "{aws_api_gateway_rest_api.magic_items_identifier_api.execution_arn}/*/${aws_api_gateway_method.get_item.http_method}${aws_api_gateway_resource.item.path}"
+  source_arn    = "arn:aws:execute-api:${var.aws_region}:${data.aws_caller_identity.current.account_id}:${aws_api_gateway_rest_api.magic_items_identifier_api.id}/*/${aws_api_gateway_method.get_item.http_method}${aws_api_gateway_resource.item.path}"
 }
 
 # API Gateway deployment

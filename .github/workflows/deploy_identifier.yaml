@@ -9,7 +9,7 @@ on:
     branches: [ main ]
 
 env:
-  AWS_REGION: us-east-1
+  AWS_REGION: eu-west-2
   TERRAFORM_VERSION: 1.5.0
   PYTHON_VERSION: 3.9
 
@@ -36,7 +36,7 @@ jobs:
       run: |
         cat > test_lambda.py << 'EOL'
         import json
-        from lambda_function import lambda_handler
+        from lambda_magic_item_identifier import lambda_handler
 
         def test_valid_item_lookup():
             event = {
