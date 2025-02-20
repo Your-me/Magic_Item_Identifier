@@ -1,0 +1,217 @@
+# .github/workflows/main.yml
+
+name: Build, Test, and Deploy Infrastructure
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  AWS_REGION: us-east-1
+  TERRAFORM_VERSION: 1.5.0
+  PYTHON_VERSION: 3.9
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pytest pytest-cov requests
+        pip install boto3 # If needed for AWS interactions
+
+    - name: Create test file
+      run: |
+        cat > test_lambda.py << 'EOL'
+        import json
+        from lambda_function import lambda_handler
+
+        def test_valid_item_lookup():
+            event = {
+                'queryStringParameters': {
+                    'name': 'Shadowfang'
+                }
+            }
+            response = lambda_handler(event, None)
+            assert response['statusCode'] == 200
+            body = json.loads(response['body'])
+            assert body['name'] == 'Shadowfang'
+            assert body['rarity'] == 'Epic'
+
+        def test_case_insensitive_lookup():
+            event = {
+                'queryStringParameters': {
+                    'name': 'shadowfang'
+                }
+            }
+            response = lambda_handler(event, None)
+            assert response['statusCode'] == 200
+
+        def test_random_item():
+            event = {
+                'queryStringParameters': {
+                    'name': 'random'
+                }
+            }
+            response = lambda_handler(event, None)
+            assert response['statusCode'] == 200
+
+        def test_invalid_item():
+            event = {
+                'queryStringParameters': {
+                    'name': 'NonexistentItem'
+                }
+            }
+            response = lambda_handler(event, None)
+            assert response['statusCode'] == 404
+
+        def test_missing_parameter():
+            event = {
+                'queryStringParameters': {}
+            }
+            response = lambda_handler(event, None)
+            assert response['statusCode'] == 400
+        EOL
+
+    - name: Run tests
+      run: |
+        pytest test_lambda.py --cov=lambda_function -v
+
+  terraform-plan:
+    name: Terraform Plan
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v2
+      with:
+        terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+    - name: Terraform Format
+      run: terraform fmt -check
+
+    - name: Terraform Init
+      run: terraform init
+
+    - name: Terraform Validate
+      run: terraform validate
+
+    - name: Terraform Plan
+      run: terraform plan -out=tfplan
+      env:
+        TF_VAR_aws_region: ${{ env.AWS_REGION }}
+
+    - name: Upload Terraform Plan
+      uses: actions/upload-artifact@v3
+      with:
+        name: tfplan
+        path: tfplan
+
+  deploy:
+    name: Deploy
+    needs: [test, terraform-plan]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: development
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v2
+      with:
+        terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+    - name: Terraform Init
+      run: terraform init
+
+    - name: Terraform Apply
+      run: terraform apply -auto-approve
+      env:
+        TF_VAR_aws_region: ${{ env.AWS_REGION }}
+
+    - name: Get API URL
+      id: get-url
+      run: |
+        API_URL=$(terraform output -raw api_url)
+        echo "API_URL=${API_URL}" >> $GITHUB_ENV
+
+    - name: Test Deployment
+      run: |
+        # Wait for API Gateway deployment to propagate
+        sleep 30
+        
+        # Test specific item
+        RESPONSE=$(curl -s "${API_URL}?name=Shadowfang")
+        echo "Testing specific item: $RESPONSE"
+        if ! echo $RESPONSE | grep -q "Shadowfang"; then
+          echo "Error: Failed to get specific item"
+          exit 1
+        fi
+        
+        # Test random item
+        RESPONSE=$(curl -s "${API_URL}?name=random")
+        echo "Testing random item: $RESPONSE"
+        if ! echo $RESPONSE | grep -q "rarity"; then
+          echo "Error: Failed to get random item"
+          exit 1
+        fi
+
+# Cleanup workflow for feature branches
+  cleanup:
+    name: Cleanup
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v2
+      with:
+        terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+    - name: Terraform Init
+      run: terraform init
+
+    - name: Terraform Destroy
+      run: terraform destroy -auto-approve
+      env:
+        TF_VAR_aws_region: ${{ env.AWS_REGION }}
