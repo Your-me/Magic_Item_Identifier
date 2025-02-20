@@ -36,7 +36,7 @@ jobs:
       run: |
         cat > test_lambda.py << 'EOL'
         import json
-        from lambda_magic_item_identifier import lambda_handler
+        from ./Infra_Serverless/lambda_magic_item_identifier import lambda_handler
 
         def test_valid_item_lookup():
             event = {
