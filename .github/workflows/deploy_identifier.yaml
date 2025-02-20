@@ -98,7 +98,10 @@ jobs:
     name: Terraform Plan
     needs: test
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'push'
+    defaults:
+      run:
+        working-directory: ./Infra_Severless
 
     steps:
     - uses: actions/checkout@v3
