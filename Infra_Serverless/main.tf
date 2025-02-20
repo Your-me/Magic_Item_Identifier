@@ -1,16 +1,16 @@
 # ZIP the Lambda function
 data "archive_file" "lambda_zip" {
   type        = "zip"
-  source_file = "${path.module}/lambda_function.py"
-  output_path = "${path.module}/lambda_function.zip"
+  source_file = "${path.module}/lambda_magic_item_identifier.py"
+  output_path = "${path.module}/lambda_magic_item_identifier.zip"
 }
 
 # Lambda function
 resource "aws_lambda_function" "magic_items_identifier_api" {
   filename      = data.archive_file.lambda_zip.output_path
-  function_name = "magic-items-api"
+  function_name = "magic-items-identifier-api"
   role          = aws_iam_role.lambda_role.arn
-  handler       = "lambda_function.lambda_handler"
+  handler       = "lambda_magic_item_identifier.lambda_handler"
   runtime       = "python3.9"
 
   environment {
@@ -82,7 +82,7 @@ resource "aws_lambda_permission" "api_gateway" {
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.magic_items_identifier_api.function_name
   principal     = "apigateway.amazonaws.com"
-  source_arn    = "${aws_api_gateway_rest_api.magic_items_api.execution_arn}/*/${aws_api_gateway_method.get_item.http_method}${aws_api_gateway_resource.item.path}"
+  source_arn    = "{aws_api_gateway_rest_api.magic_items_identifier_api.execution_arn}/*/${aws_api_gateway_method.get_item.http_method}${aws_api_gateway_resource.item.path}"
 }
 
 # API Gateway deployment
