@@ -88,7 +88,7 @@ jobs:
 
       - name: Upload Destruction Report
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: destruction-report
           path: destruction_report.txt
