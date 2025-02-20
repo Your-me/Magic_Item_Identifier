@@ -1,0 +1,109 @@
+name: Manual Infrastructure Destruction
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_destroy:
+        description: 'Type "DESTROY" to confirm'
+        required: true
+        type: string
+
+env:
+  AWS_REGION: eu-west-2
+  TERRAFORM_VERSION: 1.5.0
+  PYTHON_VERSION: 3.9
+
+jobs:
+  destroy:
+    runs-on: ubuntu-latest
+    if: github.event.inputs.confirm_destroy == 'DESTROY'
+    
+    steps:
+      - name: Confirm Destruction
+        run: |
+          echo "⚠️ DESTRUCTION CONFIRMED ⚠️"
+          echo "Initiated by: ${{ github.actor }}"
+          echo "Time: $(date)"
+
+      - uses: actions/checkout@v3
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Plan Destroy
+        run: terraform plan -destroy -out=destroy.tfplan
+
+      - name: Terraform Destroy
+        run: terraform apply "destroy.tfplan"
+
+      - name: Verify Destruction
+        run: |
+          echo "Verifying resource destruction..."
+          
+          # Check Lambda function
+          if aws lambda get-function --function-name magic-items-identifier-api 2>/dev/null; then
+            echo "❌ Error: Lambda function still exists"
+            exit 1
+          else
+            echo "✅ Lambda function destroyed successfully"
+          fi
+          
+          # Check API Gateway
+          if aws apigateway get-rest-apis --query "items[?name=='magic_items_identifier_api'].id" --output text 2>/dev/null; then
+            echo "❌ Error: API Gateway still exists"
+            exit 1
+          else
+            echo "✅ API Gateway destroyed successfully"
+          fi
+          
+          echo "🎉 Infrastructure successfully destroyed"
+
+      - name: Cleanup Terraform Files
+        if: always()
+        run: |
+          rm -rf .terraform*
+          rm -f terraform.tfstate*
+          rm -f destroy.tfplan
+
+      - name: Generate Destruction Report
+        if: always()
+        run: |
+          echo "Infrastructure Destruction Report" > destruction_report.txt
+          echo "--------------------------------" >> destruction_report.txt
+          echo "Date: $(date)" >> destruction_report.txt
+          echo "Triggered by: ${{ github.actor }}" >> destruction_report.txt
+          echo "Status: ${{ job.status }}" >> destruction_report.txt
+
+      - name: Upload Destruction Report
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: destruction-report
+          path: destruction_report.txt
+
+  notify:
+    needs: destroy
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: Notify Status
+        run: |
+          if [ "${{ needs.destroy.result }}" == "success" ]; then
+            echo "✅ Infrastructure destruction completed successfully"
+          else
+            echo "❌ Infrastructure destruction failed"
+            exit 1
+          fi

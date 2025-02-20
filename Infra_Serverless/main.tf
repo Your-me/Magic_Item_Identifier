@@ -5,25 +5,17 @@ data "archive_file" "lambda_zip" {
   output_path = "${path.module}/lambda_magic_item_identifier.zip"
 }
 
-# Lambda function
-resource "aws_lambda_function" "magic_items_identifier_api" {
-  filename      = data.archive_file.lambda_zip.output_path
-  function_name = "magic-items-identifier-api"
-  role          = aws_iam_role.lambda_role.arn
-  handler       = "lambda_magic_item_identifier.lambda_handler"
-  runtime       = "python3.9"
-
-  environment {
-    variables = {
-      LOG_LEVEL = "INFO"
-    }
-  }
+# First check if the role exists
+data "aws_iam_role" "existing_role" {
+  count = try(data.aws_iam_role.existing_role[0].name, "") != "" ? 1 : 0
+  name  = "magic_items_lambda_role"
 }
 
-# IAM role for Lambda
+# Create role only if it doesn't exist
 resource "aws_iam_role" "lambda_role" {
+  count = try(data.aws_iam_role.existing_role[0].name, "") == "" ? 1 : 0
+  
   name = "magic_items_lambda_role"
-
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -36,11 +28,36 @@ resource "aws_iam_role" "lambda_role" {
       }
     ]
   })
+
+  lifecycle {
+    create_before_destroy = true
+    prevent_destroy = false
+  }
+}
+
+# Use local variable to reference the role ARN
+locals {
+  lambda_role_arn = try(data.aws_iam_role.existing_role[0].arn, aws_iam_role.lambda_role[0].arn)
+}
+
+# Lambda function
+resource "aws_lambda_function" "magic_items_identifier_api" {
+  filename      = data.archive_file.lambda_zip.output_path
+  function_name = "magic-items-identifier-api"
+  role          = local.lambda_role_arn
+  handler       = "lambda_magic_item_identifier.lambda_handler"
+  runtime       = "python3.9"
+
+  environment {
+    variables = {
+      LOG_LEVEL = "INFO"
+    }
+  }
 }
 
 # CloudWatch Logs policy
 resource "aws_iam_role_policy_attachment" "lambda_logs" {
-  role       = aws_iam_role.lambda_role.name
+  role       = try(data.aws_iam_role.existing_role[0].name, aws_iam_role.lambda_role[0].name)
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
