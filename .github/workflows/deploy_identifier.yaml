@@ -18,6 +18,10 @@ jobs:
     name: Test
     runs-on: ubuntu-latest
 
+    defaults:
+      run:
+        working-directory: ./Infra_Serverless
+
     steps:
     - uses: actions/checkout@v3
 
@@ -36,7 +40,7 @@ jobs:
       run: |
         cat > test_lambda.py << 'EOL'
         import json
-        from ./Infra_Serverless/lambda_magic_item_identifier import lambda_handler
+        from lambda_magic_item_identifier import lambda_handler
 
         def test_valid_item_lookup():
             event = {
@@ -84,6 +88,7 @@ jobs:
             response = lambda_handler(event, None)
             assert response['statusCode'] == 400
         EOL
+      working-directory: ./Infra_Serverless  
 
     - name: Run tests
       run: |
@@ -129,7 +134,7 @@ jobs:
       with:
         name: tfplan
         path: tfplan
-
+  
   deploy:
     name: Deploy
     needs: [test, terraform-plan]
@@ -192,6 +197,9 @@ jobs:
     name: Cleanup
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    defaults:
+      run:
+        working-directory: Infra_Serveeless
 
     steps:
     - uses: actions/checkout@v3
