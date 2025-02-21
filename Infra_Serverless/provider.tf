@@ -5,12 +5,12 @@ terraform {
       version = "~> 4.0" # Or your desired version
     }
   }
-  #required_version = ">=1.0"
-  #backend "s3" {
-  #  bucket = var.bucket_name
-  #  key    = "aws/ec2-deploy/terraform.tfstate"
-  #  region = "us-east-1"      
-  #}
+  required_version = ">=1.0"
+  backend "s3" {
+    bucket = var.bucket_name
+    key    = "aws/magic_item_lambda/terraform.tfstate"
+    region = "eu-west-2"      
+  }
 }
 
 provider "aws" {
