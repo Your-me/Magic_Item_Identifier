@@ -183,11 +183,11 @@ jobs:
       - name: Get API URL
         id: get-url
         run: |
-          # Get raw output and extract URL
+          # Get raw output and clean it
           RAW_URL=$(terraform output -raw api_url)
           
-          # Extract only the URL part (remove debug information)
-          CLEAN_URL=$(echo "$RAW_URL" | grep -o 'https://[^[:space:]]*' | head -n 1)
+          # Remove ::debug::Terraform and clean the URL
+          CLEAN_URL=$(echo "$RAW_URL" | sed 's/::debug::Terraform//g' | tr -d '\n' | tr -d '\r')
           
           # Verify URL format
           if ! [[ $CLEAN_URL =~ ^https://[a-z0-9]+\.execute-api\.eu-west-2\.amazonaws\.com/dev/item$ ]]; then
