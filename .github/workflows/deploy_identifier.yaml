@@ -194,4 +194,3 @@ jobs:
           echo "Error: Failed to get random item"
           exit 1
         fi
-
