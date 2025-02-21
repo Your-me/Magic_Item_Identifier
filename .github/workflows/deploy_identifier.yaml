@@ -10,6 +10,7 @@ env:
   AWS_REGION: eu-west-2
   TERRAFORM_VERSION: 1.5.0
   PYTHON_VERSION: 3.9
+  WORKING_DIR: Infra-Serverless
 
 jobs:
   test:
@@ -127,6 +128,10 @@ jobs:
 
     - name: Terraform Plan
       run: terraform plan -out=tfplan
+      run: |
+          terraform plan -out=tfplan
+          # Create a human-readable version of the plan
+          terraform show -no-color tfplan > tfplan.txt
       env:
         TF_VAR_aws_region: ${{ env.AWS_REGION }}  
 
@@ -134,7 +139,10 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: tfplan
-        path: tfplan
+        path: |
+          ${{ env.WORKING_DIR }}/tfplan
+          ${{ env.WORKING_DIR }}/tfplan.txt
+      retention-days: 5
   
   deploy:
     name: Deploy

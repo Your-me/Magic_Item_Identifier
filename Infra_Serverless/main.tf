@@ -5,17 +5,9 @@ data "archive_file" "lambda_zip" {
   output_path = "${path.module}/lambda_magic_item_identifier.zip"
 }
 
-# First check if the role exists
-data "aws_iam_role" "existing_role" {
-  count = try(data.aws_iam_role.existing_role[0].name, "") != "" ? 1 : 0
-  name  = "magic_items_lambda_role"
-}
-
-# Create role only if it doesn't exist
-resource "aws_iam_role" "lambda_role" {
-  count = try(data.aws_iam_role.existing_role[0].name, "") == "" ? 1 : 0
-  
-  name = "magic_items_lambda_role"
+# Create new IAM role with a different name
+resource "aws_iam_role" "lambda_role_new" {
+  name = "magic_items_lambda_role_new"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -28,23 +20,13 @@ resource "aws_iam_role" "lambda_role" {
       }
     ]
   })
-
-  lifecycle {
-    create_before_destroy = true
-    prevent_destroy = false
-  }
 }
 
-# Use local variable to reference the role ARN
-locals {
-  lambda_role_arn = try(data.aws_iam_role.existing_role[0].arn, aws_iam_role.lambda_role[0].arn)
-}
-
-# Lambda function
+# Lambda function using the new role
 resource "aws_lambda_function" "magic_items_identifier_api" {
   filename      = data.archive_file.lambda_zip.output_path
   function_name = "magic-items-identifier-api"
-  role          = local.lambda_role_arn
+  role          = aws_iam_role.lambda_role_new.arn
   handler       = "lambda_magic_item_identifier.lambda_handler"
   runtime       = "python3.9"
 
@@ -57,7 +39,7 @@ resource "aws_lambda_function" "magic_items_identifier_api" {
 
 # CloudWatch Logs policy
 resource "aws_iam_role_policy_attachment" "lambda_logs" {
-  role       = try(data.aws_iam_role.existing_role[0].name, aws_iam_role.lambda_role[0].name)
+  role       = aws_iam_role.lambda_role_new.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
