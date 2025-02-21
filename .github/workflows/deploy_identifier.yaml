@@ -1,4 +1,4 @@
-name: Build, Test, and Deploy Infrastructure
+name: Magic Item Identifier Pipeline 
 
 on:
   push:
@@ -19,10 +19,10 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: Infra_Serverless
+        working-directory: ${{ env.WORKING_DIR }}
 
     steps:
-    - name: checkout repository
+    - name: Checkout Repository
       uses: actions/checkout@v4
 
     - name: Set up Python
@@ -91,7 +91,6 @@ jobs:
     - name: Run tests
       run: |
         pytest test_lambda.py --cov=lambda_magic_item_identifier -v
-        
 
   terraform-plan:
     name: Terraform Plan
@@ -100,9 +99,12 @@ jobs:
     if: github.event_name == 'push'
     defaults:
       run:
-        working-directory: Infra_Serverless
+        working-directory: ${{ env.WORKING_DIR }}
     
     steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
@@ -110,40 +112,35 @@ jobs:
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ env.AWS_REGION }}      
 
-    - name: Checkout the repository
-      uses: actions/checkout@v4
-
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v2
       with:
         terraform_version: ${{ env.TERRAFORM_VERSION }}
 
     - name: Terraform Init
-      run: terraform init -backend-config="bucket=$TF_STATE_BUCKET_NAME" -backend-config="region=$AWS_REGION"   
+      run: terraform init -backend-config="bucket=${{ env.TF_STATE_BUCKET_NAME }}" -backend-config="region=${{ env.AWS_REGION }}"   
 
     - name: Terraform Format
-      run: terraform fmt
+      run: terraform fmt -check
 
     - name: Terraform Validate
       run: terraform validate
 
     - name: Terraform Plan
-      run: terraform plan -out=tfplan
       run: |
-          terraform plan -out=tfplan
-          # Create a human-readable version of the plan
-          terraform show -no-color tfplan > tfplan.txt
+        terraform plan -out=tfplan
+        terraform show -no-color tfplan > tfplan.txt
       env:
         TF_VAR_aws_region: ${{ env.AWS_REGION }}  
 
     - name: Upload Terraform Plan
       uses: actions/upload-artifact@v4
       with:
-        name: tfplan
+        name: terraform-plan
         path: |
-          ${{ env.WORKING_DIR }}/tfplan
-          ${{ env.WORKING_DIR }}/tfplan.txt
-      retention-days: 5
+          tfplan
+          tfplan.txt
+        retention-days: 5
   
   deploy:
     name: Deploy
@@ -152,17 +149,18 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     defaults:
       run:
-        working-directory: Infra_Serverless
+        working-directory: ${{ env.WORKING_DIR }}
 
     steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ env.AWS_REGION }}  
-    - name: Checkout Repository  
-      uses: actions/checkout@v4
 
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v2
@@ -170,10 +168,15 @@ jobs:
         terraform_version: ${{ env.TERRAFORM_VERSION }}
 
     - name: Terraform Init
-      run: terraform init -backend-config="bucket=$TF_STATE_BUCKET_NAME" -backend-config="region=$AWS_REGION"
+      run: terraform init -backend-config="bucket=${{ env.TF_STATE_BUCKET_NAME }}" -backend-config="region=${{ env.AWS_REGION }}"
+
+    - name: Download Terraform Plan
+      uses: actions/download-artifact@v4
+      with:
+        name: terraform-plan
 
     - name: Terraform Apply
-      run: terraform apply -auto-approve
+      run: terraform apply -auto-approve tfplan
       env:
         TF_VAR_aws_region: ${{ env.AWS_REGION }}
 
