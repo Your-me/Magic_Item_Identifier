@@ -138,8 +138,8 @@ jobs:
       with:
         name: terraform-plan
         path: |
-          tfplan
-          tfplan.txt
+          ${{ env.WORKING_DIR }}/tfplan
+          ${{ env.WORKING_DIR }}/tfplan.txt
         retention-days: 5
   
   deploy:
