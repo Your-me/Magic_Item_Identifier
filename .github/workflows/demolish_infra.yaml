@@ -11,6 +11,8 @@ on:
 env:
   AWS_REGION: eu-west-2
   TERRAFORM_VERSION: 1.5.0
+  TF_STATE_BUCKET_NAME: ${{ secrets.AWS_TF_STATE_BUCKET_NAME }}
+
 
 jobs:
   destroy:
