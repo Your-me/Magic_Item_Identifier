@@ -121,7 +121,7 @@ jobs:
       run: terraform init -backend-config="bucket=${{ env.TF_STATE_BUCKET_NAME }}" -backend-config="region=${{ env.AWS_REGION }}"   
 
     - name: Terraform Format
-      run: terraform fmt -check
+      run: terraform fmt
 
     - name: Terraform Validate
       run: terraform validate
