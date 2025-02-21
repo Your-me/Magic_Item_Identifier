@@ -12,12 +12,13 @@ env:
   AWS_REGION: eu-west-2
   TERRAFORM_VERSION: 1.5.0
   PYTHON_VERSION: 3.9
+  WORKING_DIR: ./Infra-Serverless  # Define working directory as environment variable
 
 jobs:
   destroy:
     runs-on: ubuntu-latest
     if: github.event.inputs.confirm_destroy == 'DESTROY'
-    
+
     steps:
       - name: Confirm Destruction
         run: |
@@ -25,7 +26,19 @@ jobs:
           echo "Initiated by: ${{ github.actor }}"
           echo "Time: $(date)"
 
-      - uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Verify Working Directory
+        run: |
+          if [ ! -d "${{ env.WORKING_DIR }}" ]; then
+            echo "❌ Working directory not found: ${{ env.WORKING_DIR }}"
+            exit 1
+          fi
+          echo "✅ Working directory verified: ${{ env.WORKING_DIR }}"
+          cd ${{ env.WORKING_DIR }}
+          pwd
+          ls -la
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v2
@@ -40,15 +53,19 @@ jobs:
           terraform_version: ${{ env.TERRAFORM_VERSION }}
 
       - name: Terraform Init
+        working-directory: ${{ env.WORKING_DIR }}
         run: terraform init
 
       - name: Terraform Plan Destroy
+        working-directory: ${{ env.WORKING_DIR }}
         run: terraform plan -destroy -out=destroy.tfplan
 
       - name: Terraform Destroy
+        working-directory: ${{ env.WORKING_DIR }}
         run: terraform apply "destroy.tfplan"
 
       - name: Verify Destruction
+        working-directory: ${{ env.WORKING_DIR }}
         run: |
           echo "Verifying resource destruction..."
           
@@ -72,38 +89,8 @@ jobs:
 
       - name: Cleanup Terraform Files
         if: always()
+        working-directory: ${{ env.WORKING_DIR }}
         run: |
           rm -rf .terraform*
           rm -f terraform.tfstate*
           rm -f destroy.tfplan
-
-      - name: Generate Destruction Report
-        if: always()
-        run: |
-          echo "Infrastructure Destruction Report" > destruction_report.txt
-          echo "--------------------------------" >> destruction_report.txt
-          echo "Date: $(date)" >> destruction_report.txt
-          echo "Triggered by: ${{ github.actor }}" >> destruction_report.txt
-          echo "Status: ${{ job.status }}" >> destruction_report.txt
-
-      - name: Upload Destruction Report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: destruction-report
-          path: destruction_report.txt
-
-  notify:
-    needs: destroy
-    runs-on: ubuntu-latest
-    if: always()
-    
-    steps:
-      - name: Notify Status
-        run: |
-          if [ "${{ needs.destroy.result }}" == "success" ]; then
-            echo "✅ Infrastructure destruction completed successfully"
-          else
-            echo "❌ Infrastructure destruction failed"
-            exit 1
-          fi
