@@ -1,77 +1,246 @@
-- name: Get API URL
-id: get-url
-run: |
-  # Function to clean URL
-  clean_url() {
-    local raw_url="$1"
-    echo "$raw_url" | grep -o 'https://[^[:space:]]*' | head -n 1 | tr -d '\n' | tr -d '\r'
-  }
-  
-  # Function to validate URL format
-  validate_url() {
-    local url="$1"
-    local pattern="^https://[a-z0-9]+\.execute-api\.eu-west-2\.amazonaws\.com/dev/item$"
-    if [[ $url =~ $pattern ]]; then
-      return 0
-    else
-      return 1
-    fi
-  }
-  
-  # Get Terraform output
-  echo "Getting Terraform output..."
-  RAW_URL=$(terraform output -raw api_url)
-  echo "Raw output: $RAW_URL"
-  
-  # Clean the URL
-  echo "Cleaning URL..."
-  CLEAN_URL=$(clean_url "$RAW_URL")
-  echo "Cleaned URL: $CLEAN_URL"
-  
-  # Validate URL format
-  echo "Validating URL format..."
-  if ! validate_url "$CLEAN_URL"; then
-    echo "Error: Invalid URL format"
-    echo "Expected format: https://<api-id>.execute-api.eu-west-2.amazonaws.com/dev/item"
-    echo "Received: $CLEAN_URL"
-    exit 1
-  fi
-  
-  # Set environment variables
-  echo "Setting environment variables..."
-  {
-    echo "API_URL=$CLEAN_URL"
-    echo "api_url=$CLEAN_URL"
-  } >> "$GITHUB_ENV"
-  
-  # Set output
-  echo "api_url=$CLEAN_URL" >> "$GITHUB_OUTPUT"
-  
-  echo "✅ API URL validated and set to: $CLEAN_URL"
+name: Magic Item Identifier Pipeline 
 
-- name: Verify API URL
-run: |
-  API_URL="${{ env.API_URL }}"
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  AWS_REGION: eu-west-2
+  TERRAFORM_VERSION: 1.5.0
+  PYTHON_VERSION: 3.9
+  TF_STATE_BUCKET_NAME: ${{ secrets.AWS_TF_STATE_BUCKET_NAME }}
+  WORKING_DIR: Infra_Serverless
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ env.WORKING_DIR }}
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest pytest-cov requests
+
+      - name: Create test file
+        run: |
+          cat > test_lambda.py << 'EOL'
+          import json
+          from lambda_magic_item_identifier import lambda_handler
+
+          def test_valid_item_lookup():
+              event = {
+                  'queryStringParameters': {
+                      'name': 'Shadowfang'
+                  }
+              }
+              response = lambda_handler(event, None)
+              assert response['statusCode'] == 200
+              body = json.loads(response['body'])
+              assert body['name'] == 'Shadowfang'
+              assert body['rarity'] == 'Epic'
+
+          def test_case_insensitive_lookup():
+              event = {
+                  'queryStringParameters': {
+                      'name': 'shadowfang'
+                  }
+              }
+              response = lambda_handler(event, None)
+              assert response['statusCode'] == 200
+
+          def test_random_item():
+              event = {
+                  'queryStringParameters': {
+                      'name': 'random'
+                  }
+              }
+              response = lambda_handler(event, None)
+              assert response['statusCode'] == 200
+
+          def test_invalid_item():
+              event = {
+                  'queryStringParameters': {
+                      'name': 'NonexistentItem'
+                  }
+              }
+              response = lambda_handler(event, None)
+              assert response['statusCode'] == 404
+
+          def test_missing_parameter():
+              event = {
+                  'queryStringParameters': {}
+              }
+              response = lambda_handler(event, None)
+              assert response['statusCode'] == 400
+          EOL
+
+      - name: Run tests
+        run: |
+          pytest test_lambda.py --cov=lambda_magic_item_identifier -v
+
+  terraform-plan:
+    name: Terraform Plan
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    defaults:
+      run:
+        working-directory: ${{ env.WORKING_DIR }}
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}      
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: Terraform Init
+        run: terraform init -backend-config="bucket=${{ env.TF_STATE_BUCKET_NAME }}" -backend-config="region=${{ env.AWS_REGION }}"   
+
+      - name: Terraform Format
+        run: terraform fmt
+
+      - name: Terraform Validate
+        run: terraform validate
+
+      - name: Terraform Plan
+        run: |
+          terraform plan -out=tfplan
+          terraform show -no-color tfplan > tfplan.txt
+        env:
+          TF_VAR_aws_region: ${{ env.AWS_REGION }}  
+
+      - name: Upload Terraform Plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-plan
+          path: |
+            ${{ env.WORKING_DIR }}/tfplan
+            ${{ env.WORKING_DIR }}/tfplan.txt
+          retention-days: 5
   
-  # Verify URL is set
-  if [ -z "$API_URL" ]; then
-    echo "❌ Error: API URL is empty"
-    exit 1
-  fi
-  
-  echo "🔍 Verifying API URL: $API_URL"
-  
-  # Test URL accessibility
-  echo "Testing URL accessibility..."
-  RESPONSE=$(curl -s -w "\n%{http_code}" "$API_URL?name=Shadowfang")
-  HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-  CONTENT=$(echo "$RESPONSE" | sed '$d')
-  
-  # Check HTTP status
-  if [ "$HTTP_CODE" -ne 200 ]; then
-    echo "❌ Error: HTTP status $HTTP_CODE"
-    echo "Response: $CONTENT"
-    exit 1
-  fi
-  
-  echo "✅ API URL verified successfully"
+  deploy:
+    name: Deploy
+    needs: [test, terraform-plan]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    defaults:
+      run:
+        working-directory: ${{ env.WORKING_DIR }}
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}  
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: Terraform Init
+        run: terraform init -backend-config="bucket=${{ env.TF_STATE_BUCKET_NAME }}" -backend-config="region=${{ env.AWS_REGION }}"
+
+      - name: Download Terraform Plan
+        uses: actions/download-artifact@v4
+        with:
+          name: terraform-plan
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve
+        env:
+          TF_VAR_aws_region: ${{ env.AWS_REGION }}
+
+      - name: Get API URL
+        id: get-url
+        run: |
+          # Get raw output and extract URL
+          RAW_URL=$(terraform output -raw api_url)
+          
+          # Extract only the URL part (remove debug information)
+          CLEAN_URL=$(echo "$RAW_URL" | grep -o 'https://[^[:space:]]*' | head -n 1)
+          
+          # Verify URL format
+          if ! [[ $CLEAN_URL =~ ^https://[a-z0-9]+\.execute-api\.eu-west-2\.amazonaws\.com/dev/item$ ]]; then
+            echo "Error: Invalid URL format"
+            echo "Expected format: https://<api-id>.execute-api.eu-west-2.amazonaws.com/dev/item"
+            echo "Received: $CLEAN_URL"
+            echo "Raw output: $RAW_URL"
+            exit 1
+          fi
+          
+          # Set environment variable
+          echo "API_URL=$CLEAN_URL" >> "$GITHUB_ENV"
+          echo "api_url=$CLEAN_URL" >> "$GITHUB_OUTPUT"
+          
+          echo "API URL validated and set to: $CLEAN_URL"
+
+      - name: Test Deployment
+        run: |
+          API_URL="${{ env.API_URL }}"
+          echo "Testing API at: $API_URL"
+          
+          # Function to test endpoint
+          test_endpoint() {
+            local name="$1"
+            local expected="$2"
+            echo "Testing endpoint: $name"
+            
+            RESPONSE=$(curl -s "${API_URL}?name=${name}")
+            echo "Response: $RESPONSE"
+            
+            if echo "$RESPONSE" | grep -q "$expected"; then
+              echo "✅ Test passed for $name"
+              return 0
+            else
+              echo "❌ Test failed for $name"
+              return 1
+            fi
+          }
+          
+          # Wait for deployment
+          echo "Waiting for API Gateway deployment..."
+          sleep 30
+          
+          # Run tests
+          echo "Running tests..."
+          test_endpoint "Shadowfang" "Shadowfang" || {
+            echo "Shadowfang test failed"
+            exit 1
+          }
+          
+          test_endpoint "random" "rarity" || {
+            echo "Random item test failed"
+            exit 1
+          }
+          
+          echo "🎉 All tests passed successfully!"
