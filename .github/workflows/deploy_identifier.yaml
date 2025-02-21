@@ -176,7 +176,7 @@ jobs:
         name: terraform-plan
 
     - name: Terraform Apply
-      run: terraform apply -auto-approve tfplan
+      run: terraform apply -auto-approve
       env:
         TF_VAR_aws_region: ${{ env.AWS_REGION }}
 
