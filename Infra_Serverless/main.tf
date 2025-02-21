@@ -5,7 +5,7 @@ data "archive_file" "lambda_zip" {
   output_path = "${path.module}/lambda_magic_item_identifier.zip"
 }
 
-# Create new IAM role with a different name
+# Create new IAM role
 resource "aws_iam_role" "lambda_role_new" {
   name = "magic_items_lambda_role_new"
   assume_role_policy = jsonencode({
