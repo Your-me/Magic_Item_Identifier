@@ -11,7 +11,7 @@ env:
   TERRAFORM_VERSION: 1.5.0
   PYTHON_VERSION: 3.9
   TF_STATE_BUCKET_NAME: ${{ secrets.AWS_TF_STATE_BUCKET_NAME }}
-  WORKING_DIR: Infra-Serverless
+  WORKING_DIR: Infra_Serverless
 
 jobs:
   test:
