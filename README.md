@@ -81,7 +81,7 @@ GET https:api_url/item?name=random
 
 ## Testing
 
-### Local Testing
+### Local Testing for the lambda_function wriiten in python
 ```bash
 # Install dependencies
 pip install pytest pytest-cov requests
