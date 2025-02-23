@@ -1,0 +1,9 @@
+@api-url = https://9soxbymw23.execute-api.eu-west-2.amazonaws.com/dev/item
+
+### Test Get Item
+GET {{api-url}}
+?name=Shadowfang
+
+### Test Random Item
+GET {{api-url}}
+?name=random
