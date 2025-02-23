@@ -68,13 +68,16 @@ WORKING_DIR: Infra_Serverless
 
 ### Get Item Details
 ```http
-GET /item?name={itemName}
+GET https:api_url/item?name={itemName}
 ```
 
 ### Get Random Item
 ```http
-GET /item?name=random
+GET https:api_url/item?name=random
 ```
+
+- **Check the api-test.rest in infra_serverless dir for implementation**.
+
 
 ## Testing
 
