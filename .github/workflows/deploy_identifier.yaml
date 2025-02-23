@@ -142,7 +142,7 @@ jobs:
             ${{ env.WORKING_DIR }}/tfplan
             ${{ env.WORKING_DIR }}/tfplan.txt
           retention-days: 5
-  
+		  
   deploy:
     name: Deploy
     needs: [test, terraform-plan]
@@ -209,40 +209,28 @@ jobs:
           echo "API URL validated and set to: $CLEAN_URL"
 
       - name: Update REST File
+        env:
+          API_URL: ${{ env.API_URL }}
         run: |
-          # Navigate to root directory
-          cd $GITHUB_WORKSPACE
+          # Create REST file with API URL
+          tee api-test.rest << EOF
+          @api-url = ${API_URL}
+
+          ### Test Get Item
+          GET {{api-url}}
+          ?name=Shadowfang
+
+          ### Test Random Item
+          GET {{api-url}}
+          ?name=random
+          EOF
           
-          # Check if .rest file exists
-          if [ ! -f "api-test.rest" ]; then
-            # Create new .rest file if it doesn't exist
-            cat > api-test.rest << EOL
-            @api-url = ${CLEAN_URL}
-            
-            ### Test Get Item
-            GET {{api-url}}
-            ?name=Shadowfang
-            
-            ### Test Random Item
-            GET {{api-url}}
-            ?name=random
-            EOL
-          else
-            # Update existing .rest file
-            # Replace or add api-url variable
-            if grep -q "@api-url" api-test.rest; then
-              sed -i "s|@api-url.*|@api-url = ${CLEAN_URL}|" api-test.rest
-            else
-              sed -i "1i@api-url = ${CLEAN_URL}\n" api-test.rest
-            fi
-          fi
-          
-          echo "✅ REST file updated with new API URL"
+          # Verify file contents
+          echo "✅ REST file contents:"
           cat api-test.rest
 
       - name: Commit and Push REST File
         run: |
-          cd $GITHUB_WORKSPACE
           git config --global user.name 'GitHub Actions'
           git config --global user.email 'actions@github.com'
           git add api-test.rest
@@ -250,9 +238,10 @@ jobs:
           git push || echo "No changes to push"
 
       - name: Test Deployment
+        env:
+          API_URL: ${{ env.API_URL }}
         run: |
-          API_URL="${{ env.API_URL }}"
-          echo "Testing API at: $API_URL"
+          echo "Testing API at: ${API_URL}"
           
           # Function to test endpoint
           test_endpoint() {
