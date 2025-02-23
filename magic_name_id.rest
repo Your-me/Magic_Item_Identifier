@@ -1,20 +1,20 @@
 ### GET a name of one of the magic name
-GET https://tfa7b8dwbc.execute-api.us-east-2.amazonaws.com/dev/item?name=Eldertome
+GET https://9soxbymw23.execute-api.eu-west-2.amazonaws.com/dev/item?name=Eldertome
 
 ### GET a random name by setting name = random
-GET https://tfa7b8dwbc.execute-api.us-east-2.amazonaws.com/dev/item?name=random
+GET https://9soxbymw23.execute-api.eu-west-2.amazonaws.com/dev/item?name=random
 
 ### GET a name with case mixed up cases
-GET https://tfa7b8dwbc.execute-api.us-east-2.amazonaws.com/dev/item?name=SHAdowfanG
+GET https://9soxbymw23.execute-api.eu-west-2.amazonaws.com/dev/item?name=SHAdowfanG
 
 ### GET a name not availble in the JSON/Available name  
-GET https://tfa7b8dwbc.execute-api.us-east-2.amazonaws.com/dev/item?name=Yomi
+GET https://9soxbymw23.execute-api.eu-west-2.amazonaws.com/dev/item?name=Yomi
 
 #   {
 #   "error": "Please provide an item name using the \"name\" query parameter."
 #   }
 ### Do not supply any name
-GET https://tfa7b8dwbc.execute-api.us-east-2.amazonaws.com/dev/item
+GET https://9soxbymw23.execute-api.eu-west-2.amazonaws.com/dev/item
 
 # {
 #   "error": "Item not found. Try another name."
