@@ -142,7 +142,7 @@ jobs:
             ${{ env.WORKING_DIR }}/tfplan
             ${{ env.WORKING_DIR }}/tfplan.txt
           retention-days: 5
-		  
+
   deploy:
     name: Deploy
     needs: [test, terraform-plan]
