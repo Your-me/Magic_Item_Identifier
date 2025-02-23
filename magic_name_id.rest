@@ -1,4 +1,4 @@
-### GET a name of one of the magic name
+### GET a name of one of the magic name. Replace the all Url with the one in api-test.rest
 GET https://9soxbymw23.execute-api.eu-west-2.amazonaws.com/dev/item?name=Eldertome
 
 ### GET a random name by setting name = random
